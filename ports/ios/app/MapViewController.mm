@@ -193,6 +193,13 @@ static UIButton *button(NSString *text,id target,SEL action) {
                                               name:UIApplicationWillResignActiveNotification object:nil];
     [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(didBecomeActive)
                                               name:UIApplicationDidBecomeActiveNotification object:nil];
+                                              
+    // Observadores de seguridad para pantallas externas (HDMI / AirPlay)
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(screenDidConnect:)
+                                              name:UIScreenDidConnectNotification object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(screenDidDisconnect:)
+                                              name:UIScreenDidDisconnectNotification object:nil];
+
     if(!_renderer) {_status.text=error.localizedDescription?:@"Metal non disponibile";_open.enabled=NO;}
     else if(KisakCore_RunSelfTests()!=0) {
         _status.text=@"Verifica del codice MD4/Huffman non riuscita."; _open.enabled=NO;
@@ -206,6 +213,21 @@ static UIButton *button(NSString *text,id target,SEL action) {
         }
     }
 }
+
+- (void)screenDidConnect:(NSNotification *)notification {
+    (void)notification;
+    if (_metalView) {
+        [_metalView setNeedsLayout];
+    }
+}
+
+- (void)screenDidDisconnect:(NSNotification *)notification {
+    (void)notification;
+    if (_metalView) {
+        [_metalView setNeedsLayout];
+    }
+}
+
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
     // Keep the introductory content readable on compact landscape iPhones.
@@ -322,6 +344,10 @@ static UIButton *button(NSString *text,id target,SEL action) {
             controller->_mapName.lineBreakMode=NSLineBreakByTruncatingMiddle;
             controller->_mapName.numberOfLines=1;
             controller->_status.text=[NSString stringWithFormat:@"%lu triangoli · Sinistra: muovi / destra: guarda · Volo libero, senza collisioni",(unsigned long)(mesh->indices.size()/3)];
+            
+            // Forzar un dibujado inmediato para evitar el fallo de pantalla en negro con HDMI conectado al arrancar
+            [controller->_metalView draw];
+            
             [controller setNeedsUpdateOfHomeIndicatorAutoHidden];
             [controller updateRunning];
         });
