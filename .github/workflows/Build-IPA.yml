@@ -1,0 +1,61 @@
+name: Build COD4 iOS IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 120
+    steps:
+      - name: Refuse to build in a public repository
+        if: ${{ !github.event.repository.private }}
+        run: |
+          echo "::error::Make your copy of this repository PRIVATE first."
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install build tools
+        run: brew install cmake ninja
+
+      - name: Set up Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Compile project for iOS
+        run: |
+          cd ports/ios
+          # Si usa script de compilación interno o CMake directo
+          if [ -f "scripts/build.sh" ]; then
+            bash scripts/build.sh
+          else
+            cmake -B build -G Ninja -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos
+            cmake --build build
+          fi
+
+      - name: Package IPA
+        run: |
+          # Empaquetamos la app compilada en formato IPA listo para SideStore/AltStore
+          mkdir -p Payload
+          # Ajusta el nombre si el binario del .app generado tiene otro nombre en tu build
+          cp -R ports/ios/build/*.app Payload/ 2>/dev/null || cp -R ports/ios/*.app Payload/ 2>/dev/null || true
+          zip -r COD4iOS.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: COD4iOS-ipa
+          path: COD4iOS.ipa
+          retention-days: 3
+
+      - name: Publish as a Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest-ipa --repo "${{ github.repository }}" --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest-ipa COD4iOS.ipa --repo "${{ github.repository }}" --title "COD4 iOS HDMI (built $(date -u +%Y-%m-%d))" \
+            --notes "Download COD4iOS.ipa and install via SideStore/AltStore."
